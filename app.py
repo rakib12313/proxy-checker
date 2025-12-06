@@ -536,6 +536,7 @@ if st.session_state.logs:
 # --- FOOTER ---
 st.markdown("""
 <div class="glass-footer">
-    Developed with ❤️ by <b>RAKIB</b> &nbsp;•&nbsp; BDIX Intelligence &nbsp;•&nbsp; Apple Glass UI
+    Developed by <b>RAKIB</b> &nbsp;•&nbsp; BDIX Intelligence &nbsp;•&nbsp;
 </div>
 """, unsafe_allow_html=True)
+
