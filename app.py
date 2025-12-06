@@ -21,33 +21,125 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CUSTOM STYLING ---
+# --- APPLE GLASS UI THEME (CSS) ---
 st.markdown("""
     <style>
-    .stApp {background-color: #0e1117;}
-    
-    /* Live Log Styling */
-    .terminal-log {
-        background-color: #000000;
-        color: #00ff00;
-        font-family: 'Courier New', monospace;
-        padding: 10px;
-        border-radius: 5px;
-        height: 150px;
-        overflow-y: auto;
-        font-size: 12px;
+    /* 1. ANIMATED BACKGROUND */
+    .stApp {
+        background: linear-gradient(-45deg, #000428, #004e92, #0f0c29, #302b63, #24243e);
+        background-size: 400% 400%;
+        animation: gradient 15s ease infinite;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    @keyframes gradient {
+        0% {background-position: 0% 50%;}
+        50% {background-position: 100% 50%;}
+        100% {background-position: 0% 50%;}
+    }
+
+    /* 2. GLASSMORPHISM CARD STYLE */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+
+    /* 3. INPUT AREAS */
+    .stTextArea textarea, .stTextInput input {
+        background-color: rgba(0, 0, 0, 0.3) !important;
+        color: #e0e0e0 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+    }
+    .stTextArea textarea:focus {
+        border-color: #007aff !important;
+        box-shadow: 0 0 10px rgba(0, 122, 255, 0.3);
+    }
+
+    /* 4. BUTTONS (Apple Style Pills) */
+    div.stButton > button {
+        background: linear-gradient(135deg, #007aff 0%, #005ecb 100%);
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 10px 24px;
+        font-weight: 500;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+    }
+    div.stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5);
+    }
+    /* Secondary Button (Clear/Remove) style tweak via CSS selectors is hard in streamlit, 
+       so we stick to the primary style for consistency */
+
+    /* 5. METRICS */
+    [data-testid="stMetric"] {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 24px;
+        color: #ffffff;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #a1a1aa;
+    }
+
+    /* 6. TERMINAL LOG */
+    .terminal-container {
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 12px;
         border: 1px solid #333;
+        padding: 15px;
+        font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+        font-size: 12px;
+        color: #00ff9d;
+        height: 200px;
+        overflow-y: auto;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+    }
+
+    /* 7. DATAFRAME / TABLES */
+    [data-testid="stDataFrame"] {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    /* 8. FOOTER */
+    .glass-footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background: rgba(22, 22, 22, 0.8);
+        backdrop-filter: blur(10px);
+        color: #888;
+        text-align: center;
+        padding: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        z-index: 100;
     }
     
-    /* Footer */
-    .footer {
-        width: 100%;
-        text-align: center;
-        padding: 15px;
-        margin-top: 50px;
-        color: #555;
-        font-size: 12px;
-        border-top: 1px solid #333;
+    /* HIDE STREAMLIT BRANDING */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* CUSTOM HEADERS */
+    h1, h2, h3 {
+        color: #ffffff;
+        font-weight: 600;
+        letter-spacing: -0.5px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -69,7 +161,7 @@ http://ftp.samonline.net/"""
 def log_event(message):
     timestamp = datetime.now().strftime("%H:%M:%S")
     st.session_state.logs.append(f"[{timestamp}] {message}")
-    if len(st.session_state.logs) > 50:
+    if len(st.session_state.logs) > 60:
         st.session_state.logs.pop(0)
 
 def get_real_ip():
@@ -82,7 +174,7 @@ def fetch_from_url(url):
         return resp.text if resp.status_code == 200 else None
     except: return None
 
-# 1. General Check + ISP DETECTION
+# 1. General Check
 def check_proxy_basic(proxy_data, timeout, real_ip):
     ip, port, protocol = proxy_data['ip'], proxy_data['port'], proxy_data['protocol']
     proxy_conf = {
@@ -142,9 +234,9 @@ def check_specific_target(proxy_data, target_urls, timeout):
             if resp.status_code == 200:
                 proxy_result[url] = "✅ 200 OK"
             elif resp.status_code == 403:
-                proxy_result[url] = "⛔ 403 (Blocked)"
+                proxy_result[url] = "⛔ 403"
             elif resp.status_code == 404:
-                proxy_result[url] = "⚠️ 404 (Not Found)"
+                proxy_result[url] = "⚠️ 404"
             else:
                 proxy_result[url] = f"⚠️ {resp.status_code}"
         except:
@@ -154,55 +246,77 @@ def check_specific_target(proxy_data, target_urls, timeout):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.title("🛡️ Proxy Master")
-    st.markdown("### By **RAKIB**")
+    st.markdown("## 🛡️ Proxy Master")
+    st.caption("Created by **RAKIB**")
     st.divider()
     
-    with st.expander("⚙️ Advanced Settings", expanded=True):
-        threads = st.slider("Threads", 5, 50, 25)
-        timeout = st.slider("Timeout", 1, 15, 6)
-        force_proto = st.selectbox("Protocol", ["AUTO", "http", "socks4", "socks5"])
+    st.markdown("### ⚙️ Engine Config")
+    threads = st.slider("Threads", 5, 50, 25)
+    timeout = st.slider("Timeout", 1, 15, 6)
+    force_proto = st.selectbox("Force Protocol", ["AUTO", "http", "socks4", "socks5"])
     
-    st.info("Supported: ip:port | protocol://ip:port")
+    st.divider()
+    st.markdown("""
+    <div style='background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; font-size: 12px;'>
+    <b>Pro Tip:</b><br>
+    The Matrix tab detects which specific BDIX server works for each proxy.
+    </div>
+    """, unsafe_allow_html=True)
 
-# --- MAIN UI ---
-st.title("🚀 Proxy & BDIX Master")
-st.markdown("**Created by RAKIB** | *v4.3 Professional*")
+# --- HEADER AREA ---
+col_h1, col_h2 = st.columns([4, 1])
+with col_h1:
+    st.title("Proxy Master Pro")
+    st.markdown("<span style='color: #007aff; font-weight: bold;'>BDIX INTELLIGENCE SYSTEM</span>", unsafe_allow_html=True)
+with col_h2:
+    if st.button("🔄 Refresh App", use_container_width=True):
+        st.rerun()
 
-# INPUT SECTION
-tab1, tab2 = st.tabs(["📋 Proxies", "🎯 BDIX/FTP Targets"])
+st.write("") # Spacer
+
+# --- INPUT SECTION (GLASS CARD) ---
+st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+tab1, tab2 = st.tabs(["📋 **Proxy Input**", "🎯 **Target List**"])
 
 with tab1:
     st.session_state.proxy_text = st.text_area(
-        "Paste Proxies", value=st.session_state.proxy_text, height=120, 
+        "Input", 
+        value=st.session_state.proxy_text, 
+        height=150, 
         placeholder="socks5://103.141.67.50:9090\n113.212.109.40:1080", 
         label_visibility="collapsed"
     )
-    c1, c2 = st.columns(2)
-    if c1.button("🗑️ Clear Input", use_container_width=True):
-        st.session_state.proxy_text = ""
-        st.session_state.results = []
-        st.session_state.ftp_results = []
-        st.session_state.check_done = False
-        st.session_state.logs = []
-        st.rerun()
-    if c2.button("🧹 Remove Dupes", use_container_width=True):
-        raw = st.session_state.proxy_text.strip().split('\n')
-        unique = sorted(list(set([l.strip() for l in raw if l.strip()])))
-        st.session_state.proxy_text = "\n".join(unique)
-        st.rerun()
+    
+    c1, c2, c3 = st.columns([1, 1, 3])
+    with c1:
+        if st.button("🗑️ Clear", use_container_width=True):
+            st.session_state.proxy_text = ""
+            st.session_state.results = []
+            st.session_state.ftp_results = []
+            st.session_state.check_done = False
+            st.session_state.logs = []
+            st.rerun()
+    with c2:
+        if st.button("🧹 Dedupe", use_container_width=True):
+            raw = st.session_state.proxy_text.strip().split('\n')
+            unique = sorted(list(set([l.strip() for l in raw if l.strip()])))
+            st.session_state.proxy_text = "\n".join(unique)
+            st.rerun()
 
 with tab2:
-    st.info("Proxies will be tested against these URLs:")
-    target_text = st.text_area("Target URLs", value=DEFAULT_TARGETS, height=120)
+    st.info("Proxies will be tested against these URLs (BDIX/FTP):")
+    target_text = st.text_area("Targets", value=DEFAULT_TARGETS, height=150, label_visibility="collapsed")
+st.markdown('</div>', unsafe_allow_html=True) # End Glass Card
 
-# START BUTTON
-if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=True):
+# --- ACTION BUTTON ---
+if st.button("▶ INITIATE SCAN SEQUENCE", type="primary", use_container_width=True):
+    # Reset
     st.session_state.results = []
     st.session_state.ftp_results = []
     st.session_state.check_done = False
     st.session_state.logs = []
     
+    # Parse Logic
     lines = st.session_state.proxy_text.strip().split('\n')
     proxies_to_check = []
     seen = set()
@@ -210,8 +324,9 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
     for line in lines:
         line = line.strip()
         if not line: continue
-        
         ip, port, proto = None, None, None
+        
+        # Regex for 'protocol://ip:port' or 'ip:port'
         regex_match = re.search(r'(?:(?P<proto>[a-z0-9]+)://)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)', line, re.IGNORECASE)
         
         if regex_match:
@@ -240,14 +355,15 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
                 proxies_to_check.append({"ip": ip, "port": port, "protocol": proto})
 
     if not proxies_to_check:
-        st.warning("No valid proxies found.")
+        st.warning("No valid proxies detected.")
     else:
-        # PHASE 1
+        # EXECUTION: PHASE 1
         real_ip = get_real_ip()
         results_temp = []
-        col_p1, col_p2 = st.columns([3, 1])
-        with col_p1: bar = st.progress(0)
-        with col_p2: status = st.empty()
+        
+        # Progress Bar
+        bar = st.progress(0)
+        status_text = st.empty()
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
             future_to_proxy = {executor.submit(check_proxy_basic, p, timeout, real_ip): p for p in proxies_to_check}
@@ -256,14 +372,17 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
                 res = future.result()
                 results_temp.append(res)
                 completed += 1
-                bar.progress(completed / len(proxies_to_check))
-                status.markdown(f"**Scan: {completed}/{len(proxies_to_check)}**")
-                if res['Status'] == 'Working': log_event(f"SUCCESS: {res['IP']} ({res['ISP']})")
+                progress = completed / len(proxies_to_check)
+                bar.progress(progress)
+                status_text.markdown(f"**Scanning Node: {completed}/{len(proxies_to_check)}**")
+                
+                if res['Status'] == 'Working': 
+                    log_event(f"ALIVE: {res['IP']} :: {res['ISP']}")
                 
         st.session_state.results = results_temp
         
-        # PHASE 2
-        log_event("Starting Target Checks...")
+        # EXECUTION: PHASE 2
+        log_event("Initializing Target Matrix Check...")
         target_list = target_text.strip().split('\n')
         ftp_temp = []
         bar.progress(0)
@@ -276,105 +395,85 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
                 ftp_temp.append(f_res)
                 completed += 1
                 bar.progress(completed / len(results_temp))
-                status.markdown(f"**Target: {completed}/{len(results_temp)}**")
+                status_text.markdown(f"**Verifying Targets: {completed}/{len(results_temp)}**")
 
         st.session_state.ftp_results = ftp_temp
         st.session_state.check_done = True
-        status.markdown("**✅ DONE**")
+        status_text.empty()
+        bar.empty()
         st.rerun()
 
-# --- RESULTS DISPLAY ---
+# --- RESULTS SECTION ---
 if st.session_state.check_done:
     df = pd.DataFrame(st.session_state.results)
     df_working = df[df['Status'] == "Working"]
     df_dead = df[df['Status'] == "Dead"]
     
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total", len(df))
-    m2.metric("Working", len(df_working))
-    m3.metric("Avg Latency", f"{int(df_working['Latency'].mean())}ms" if not df_working.empty else "-")
-    m4.metric("Targets Hit", "View Below")
+    # METRICS ROW
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Nodes Processed", len(df))
+    c2.metric("Online Nodes", len(df_working))
+    c3.metric("Latency (Avg)", f"{int(df_working['Latency'].mean())}ms" if not df_working.empty else "-")
+    c4.metric("Targets", len(target_text.strip().split('\n')))
 
-    res_tab1, res_tab2, res_tab3 = st.tabs(["🎯 BDIX/FTP Matrix", "✅ Working & ISPs", "❌ Dead"])
+    # TABS (GLASS CARD WRAPPED)
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    res_tab1, res_tab2, res_tab3 = st.tabs(["🚀 **BDIX Matrix**", "✅ **Working List**", "❌ **Dead List**"])
 
-    # --- TAB 1: FTP MATRIX (ENHANCED COPY) ---
+    # --- TAB 1: BDIX MATRIX ---
     with res_tab1:
         if st.session_state.ftp_results:
-            st.markdown("💡 **Tip:** Look for cells marked `✅ 200 OK`.")
+            st.markdown("##### Target Connectivity Matrix")
             df_ftp = pd.DataFrame(st.session_state.ftp_results)
             
-            # 1. Identify Successful Rows
-            # Check if any column contains "✅"
             success_mask = df_ftp.astype(str).apply(lambda x: x.str.contains('✅')).any(axis=1)
             success_proxies = df_ftp[success_mask].copy()
 
-            # 2. Show Main Matrix Table
             base_cols = ['Proxy', 'Type']
             target_cols = [c for c in df_ftp.columns if c not in base_cols and c != 'Raw_IP']
             
+            # Styling for the dataframe
             def color_matrix(val):
-                if '✅' in str(val): return 'background-color: #28a745; color: white;'
-                if '⛔' in str(val): return 'background-color: #ffc107; color: black;'
+                if '✅' in str(val): return 'background-color: #1c4e28; color: #a6ffbe;' # Dark Green background
+                if '⛔' in str(val): return 'background-color: #5c4d00; color: #ffdca6;' # Dark Orange
                 return ''
             
             st.dataframe(df_ftp[base_cols + target_cols].style.applymap(color_matrix), use_container_width=True)
 
-            st.divider()
-            st.subheader("📋 Copy Successful Proxies")
-
             if not success_proxies.empty:
-                # 3. Create Detailed Format for Copying
-                # Function to generate string: "PROTO://IP:PORT | Opens: url1, url2"
+                st.divider()
+                st.subheader("📋 Extraction")
+                
+                # Format logic
                 def format_success_row(row):
                     worked_urls = []
                     for col in target_cols:
-                        if '✅' in str(row[col]):
-                            worked_urls.append(col)
-                    
-                    proto_prefix = f"{row['Type']}://".lower()
-                    return f"{proto_prefix}{row['Raw_IP']} | Opens: {', '.join(worked_urls)}"
+                        if '✅' in str(row[col]): worked_urls.append(col)
+                    return f"{row['Type'].lower()}://{row['Raw_IP']} | Opens: {', '.join(worked_urls)}"
 
                 success_proxies['Copy_Format'] = success_proxies.apply(format_success_row, axis=1)
 
-                col_sel, col_code = st.columns([3, 2])
-                
+                col_sel, col_code = st.columns([1, 1])
                 with col_sel:
-                    st.caption("👇 **Select checkboxes** to copy specific proxies.")
-                    # Show a clean table for selection
+                    st.caption("Select to Copy")
                     sel_ftp = st.dataframe(
                         success_proxies[['Type', 'Raw_IP', 'Copy_Format']],
-                        column_config={
-                            "Copy_Format": None, # Hide the long string
-                            "Raw_IP": "IP Address"
-                        },
-                        use_container_width=True,
-                        hide_index=True,
-                        on_select="rerun",
-                        selection_mode="multi-row"
+                        column_config={"Copy_Format": None, "Raw_IP": "IP Address"},
+                        use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row"
                     )
-
                 with col_code:
-                    # Logic for Copy Box
                     rows = sel_ftp.selection.rows
                     if rows:
-                        # Copy Selected
                         txt = "\n".join(success_proxies.iloc[rows]['Copy_Format'].tolist())
                         st.info(f"{len(rows)} Selected")
                         st.code(txt, language="text")
-                        st.caption("⬆ Click icon to copy selection")
                     else:
-                        # Copy All
-                        all_txt = "\n".join(success_proxies['Copy_Format'].tolist())
-                        st.markdown("**Copy All Working:**")
-                        st.code(all_txt, language="text")
-                        st.caption("⬆ Click icon to copy all")
+                        st.info("Copy All")
+                        st.code("\n".join(success_proxies['Copy_Format'].tolist()), language="text")
             else:
-                st.warning("No proxies opened any of your target URLs.")
+                st.warning("No proxies successfully opened any target.")
 
-        else:
-            st.info("No results yet.")
-
-    # TAB 2: WORKING & ISP
+    # --- TAB 2: WORKING LIST ---
     with res_tab2:
         if not df_working.empty:
             def latency_color(val):
@@ -396,28 +495,47 @@ if st.session_state.check_done:
                 txt = "\n".join(disp_df.iloc[rows]['Full_Address'].tolist())
                 st.code(txt, language="text")
             else:
+                # ISP Filter Logic
                 isps = sorted(df_working['ISP'].unique().tolist())
-                selected_isp = st.selectbox("Quick Copy by ISP:", ["All"] + isps)
-                if selected_isp != "All":
-                    filtered = df_working[df_working['ISP'] == selected_isp]
-                    st.code("\n".join(filtered['Full_Address'].tolist()))
-                else:
-                    with st.expander("Show All Working List"):
-                        st.code("\n".join(df_working['Full_Address'].tolist()))
+                c_f1, c_f2 = st.columns([1, 2])
+                with c_f1:
+                    selected_isp = st.selectbox("Filter ISP", ["All"] + isps)
+                with c_f2:
+                    if selected_isp != "All":
+                        filtered = df_working[df_working['ISP'] == selected_isp]
+                        st.code("\n".join(filtered['Full_Address'].tolist()), language="text")
+                    else:
+                        with st.expander("Show All"):
+                            st.code("\n".join(df_working['Full_Address'].tolist()))
         else:
-            st.warning("No working proxies.")
+            st.warning("No working proxies detected.")
 
-    # TAB 3: DEAD
+    # --- TAB 3: DEAD LIST ---
     with res_tab3:
         if not df_dead.empty:
-            st.dataframe(df_dead[['IP', 'Port', 'Protocol', 'Status']], use_container_width=True, hide_index=True)
-            with st.expander("Copy Dead List"):
+            st.dataframe(df_dead[['IP', 'Port', 'Protocol']], use_container_width=True, hide_index=True)
+            with st.expander("Show List"):
                 st.code("\n".join(df_dead['Full_Address'].tolist()))
+
+    st.markdown('</div>', unsafe_allow_html=True) # End Glass Card
+
+# --- LIVE TERMINAL ---
+if st.session_state.logs:
+    st.write("")
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.caption("🖥️ System Logs")
+    # Custom HTML log for style
+    log_content = "<br>".join([f"<span style='color: #00ff00;'>&gt;</span> {l}" for l in st.session_state.logs[::-1]])
+    st.markdown(f"""
+    <div class='terminal-container'>
+        {log_content}
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- FOOTER ---
 st.markdown("""
-<div class="footer">
-    Developed with ❤️ by <b>RAKIB</b><br>
-    BDIX Specialist • ISP Detection • Latency Grading
+<div class="glass-footer">
+    Developed with ❤️ by <b>RAKIB</b> &nbsp;•&nbsp; BDIX Intelligence &nbsp;•&nbsp; Apple Glass UI
 </div>
 """, unsafe_allow_html=True)
