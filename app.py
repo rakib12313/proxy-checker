@@ -102,7 +102,6 @@ def check_proxy_basic(proxy_data, timeout, real_ip):
         if resp.status_code == 200:
             result['Latency'] = latency
             result['Status'] = "Working"
-            
             try:
                 geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=2).json()
                 if geo['status'] == 'success': 
@@ -164,11 +163,11 @@ with st.sidebar:
         timeout = st.slider("Timeout", 1, 15, 6)
         force_proto = st.selectbox("Protocol", ["AUTO", "http", "socks4", "socks5"])
     
-    st.info("Supported formats:\n1. ip:port\n2. protocol://ip:port\n3. ip port protocol")
+    st.info("Supported: ip:port | protocol://ip:port")
 
 # --- MAIN UI ---
 st.title("🚀 Proxy & BDIX Master")
-st.markdown("**Created by RAKIB** | *v4.2 Professional*")
+st.markdown("**Created by RAKIB** | *v4.3 Professional*")
 
 # INPUT SECTION
 tab1, tab2 = st.tabs(["📋 Proxies", "🎯 BDIX/FTP Targets"])
@@ -176,7 +175,7 @@ tab1, tab2 = st.tabs(["📋 Proxies", "🎯 BDIX/FTP Targets"])
 with tab1:
     st.session_state.proxy_text = st.text_area(
         "Paste Proxies", value=st.session_state.proxy_text, height=120, 
-        placeholder="socks5://103.141.67.50:9090\n113.212.109.40:1080\n123.123.123.123 8080", 
+        placeholder="socks5://103.141.67.50:9090\n113.212.109.40:1080", 
         label_visibility="collapsed"
     )
     c1, c2 = st.columns(2)
@@ -187,14 +186,14 @@ with tab1:
         st.session_state.check_done = False
         st.session_state.logs = []
         st.rerun()
-    if c2.button("🧹 Remove Duplicates", use_container_width=True):
+    if c2.button("🧹 Remove Dupes", use_container_width=True):
         raw = st.session_state.proxy_text.strip().split('\n')
         unique = sorted(list(set([l.strip() for l in raw if l.strip()])))
         st.session_state.proxy_text = "\n".join(unique)
         st.rerun()
 
 with tab2:
-    st.info("Proxies (Dead & Alive) will be tested against these:")
+    st.info("Proxies will be tested against these URLs:")
     target_text = st.text_area("Target URLs", value=DEFAULT_TARGETS, height=120)
 
 # START BUTTON
@@ -208,49 +207,32 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
     proxies_to_check = []
     seen = set()
     
-    # --- UPDATED PARSING LOGIC ---
     for line in lines:
         line = line.strip()
         if not line: continue
         
         ip, port, proto = None, None, None
-        
-        # Regex for 'protocol://ip:port' or 'ip:port'
-        # Group 1: Protocol (optional)
-        # Group 2: IP
-        # Group 3: Port
         regex_match = re.search(r'(?:(?P<proto>[a-z0-9]+)://)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)', line, re.IGNORECASE)
         
         if regex_match:
-            # Case 1 & 2: protocol://ip:port OR ip:port
             ip = regex_match.group('ip')
             port = regex_match.group('port')
             extracted_proto = regex_match.group('proto')
-            
-            # Determine Protocol
-            if extracted_proto:
-                # If explicit in string (socks5://...), use it
-                proto = extracted_proto.lower()
-            else:
-                # If just ip:port, check settings or other text in line
-                proto = force_proto if force_proto != "AUTO" else "http"
-                if force_proto == "AUTO":
-                    if "socks5" in line.lower(): proto = "socks5"
-                    elif "socks4" in line.lower(): proto = "socks4"
-                    elif "https" in line.lower(): proto = "https"
+            proto = extracted_proto.lower() if extracted_proto else (force_proto if force_proto != "AUTO" else "http")
+            if force_proto == "AUTO" and not extracted_proto:
+                if "socks5" in line.lower(): proto = "socks5"
+                elif "socks4" in line.lower(): proto = "socks4"
+                elif "https" in line.lower(): proto = "https"
         else:
-            # Case 3: Space Separated (Old Format)
             parts = line.split()
             if len(parts) >= 2:
-                ip = parts[0]
-                port = parts[1]
+                ip, port = parts[0], parts[1]
                 proto = force_proto if force_proto != "AUTO" else "http"
                 if force_proto == "AUTO":
                     if "socks5" in line.lower(): proto = "socks5"
                     elif "socks4" in line.lower(): proto = "socks4"
                     elif "https" in line.lower(): proto = "https"
         
-        # Validate and Add
         if ip and port and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
             unique_id = f"{ip}:{port}"
             if unique_id not in seen:
@@ -258,18 +240,14 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
                 proxies_to_check.append({"ip": ip, "port": port, "protocol": proto})
 
     if not proxies_to_check:
-        st.warning("No valid proxies found. Check your format.")
+        st.warning("No valid proxies found.")
     else:
         # PHASE 1
-        log_container = st.empty()
         real_ip = get_real_ip()
         results_temp = []
-        
         col_p1, col_p2 = st.columns([3, 1])
         with col_p1: bar = st.progress(0)
         with col_p2: status = st.empty()
-
-        st.markdown("---")
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
             future_to_proxy = {executor.submit(check_proxy_basic, p, timeout, real_ip): p for p in proxies_to_check}
@@ -280,9 +258,7 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
                 completed += 1
                 bar.progress(completed / len(proxies_to_check))
                 status.markdown(f"**Scan: {completed}/{len(proxies_to_check)}**")
-                
-                if res['Status'] == 'Working':
-                    log_event(f"SUCCESS: {res['IP']} ({res['ISP']})")
+                if res['Status'] == 'Working': log_event(f"SUCCESS: {res['IP']} ({res['ISP']})")
                 
         st.session_state.results = results_temp
         
@@ -321,31 +297,82 @@ if st.session_state.check_done:
 
     res_tab1, res_tab2, res_tab3 = st.tabs(["🎯 BDIX/FTP Matrix", "✅ Working & ISPs", "❌ Dead"])
 
-    # TAB 1: FTP MATRIX
+    # --- TAB 1: FTP MATRIX (ENHANCED COPY) ---
     with res_tab1:
         if st.session_state.ftp_results:
             st.markdown("💡 **Tip:** Look for cells marked `✅ 200 OK`.")
             df_ftp = pd.DataFrame(st.session_state.ftp_results)
             
-            # REORDER COLS
+            # 1. Identify Successful Rows
+            # Check if any column contains "✅"
+            success_mask = df_ftp.astype(str).apply(lambda x: x.str.contains('✅')).any(axis=1)
+            success_proxies = df_ftp[success_mask].copy()
+
+            # 2. Show Main Matrix Table
             base_cols = ['Proxy', 'Type']
             target_cols = [c for c in df_ftp.columns if c not in base_cols and c != 'Raw_IP']
-            df_ftp_display = df_ftp[base_cols + target_cols]
-
+            
             def color_matrix(val):
                 if '✅' in str(val): return 'background-color: #28a745; color: white;'
                 if '⛔' in str(val): return 'background-color: #ffc107; color: black;'
                 return ''
-
-            st.dataframe(df_ftp_display.style.applymap(color_matrix), use_container_width=True)
             
-            success_proxies = df_ftp[df_ftp.astype(str).apply(lambda x: x.str.contains('✅')).any(axis=1)]
+            st.dataframe(df_ftp[base_cols + target_cols].style.applymap(color_matrix), use_container_width=True)
+
+            st.divider()
+            st.subheader("📋 Copy Successful Proxies")
+
             if not success_proxies.empty:
-                ips = success_proxies['Raw_IP'].tolist()
-                with st.expander(f"Copy {len(ips)} Proxies that opened at least one target"):
-                    st.code("\n".join(ips))
+                # 3. Create Detailed Format for Copying
+                # Function to generate string: "PROTO://IP:PORT | Opens: url1, url2"
+                def format_success_row(row):
+                    worked_urls = []
+                    for col in target_cols:
+                        if '✅' in str(row[col]):
+                            worked_urls.append(col)
+                    
+                    proto_prefix = f"{row['Type']}://".lower()
+                    return f"{proto_prefix}{row['Raw_IP']} | Opens: {', '.join(worked_urls)}"
+
+                success_proxies['Copy_Format'] = success_proxies.apply(format_success_row, axis=1)
+
+                col_sel, col_code = st.columns([3, 2])
+                
+                with col_sel:
+                    st.caption("👇 **Select checkboxes** to copy specific proxies.")
+                    # Show a clean table for selection
+                    sel_ftp = st.dataframe(
+                        success_proxies[['Type', 'Raw_IP', 'Copy_Format']],
+                        column_config={
+                            "Copy_Format": None, # Hide the long string
+                            "Raw_IP": "IP Address"
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        on_select="rerun",
+                        selection_mode="multi-row"
+                    )
+
+                with col_code:
+                    # Logic for Copy Box
+                    rows = sel_ftp.selection.rows
+                    if rows:
+                        # Copy Selected
+                        txt = "\n".join(success_proxies.iloc[rows]['Copy_Format'].tolist())
+                        st.info(f"{len(rows)} Selected")
+                        st.code(txt, language="text")
+                        st.caption("⬆ Click icon to copy selection")
+                    else:
+                        # Copy All
+                        all_txt = "\n".join(success_proxies['Copy_Format'].tolist())
+                        st.markdown("**Copy All Working:**")
+                        st.code(all_txt, language="text")
+                        st.caption("⬆ Click icon to copy all")
+            else:
+                st.warning("No proxies opened any of your target URLs.")
+
         else:
-            st.info("No results.")
+            st.info("No results yet.")
 
     # TAB 2: WORKING & ISP
     with res_tab2:
@@ -360,10 +387,7 @@ if st.session_state.check_done:
             
             sel_w = st.dataframe(
                 disp_df,
-                column_config={
-                    "Latency": st.column_config.NumberColumn(format="%d ms"),
-                    "Full_Address": None
-                },
+                column_config={"Latency": st.column_config.NumberColumn(format="%d ms"), "Full_Address": None},
                 use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row"
             )
             
@@ -389,12 +413,6 @@ if st.session_state.check_done:
             st.dataframe(df_dead[['IP', 'Port', 'Protocol', 'Status']], use_container_width=True, hide_index=True)
             with st.expander("Copy Dead List"):
                 st.code("\n".join(df_dead['Full_Address'].tolist()))
-
-# --- LIVE LOGS ---
-if st.session_state.logs:
-    with st.expander("🖥️ Live Terminal Logs", expanded=False):
-        log_txt = "\n".join(st.session_state.logs[::-1])
-        st.text_area("Log Output", value=log_txt, height=150, disabled=True)
 
 # --- FOOTER ---
 st.markdown("""
