@@ -18,7 +18,7 @@ st.set_page_config(
     page_title="Proxy Master Pro",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="collapsed" # Clean look
+    initial_sidebar_state="collapsed"
 )
 
 # --- CUSTOM STYLING ---
@@ -69,7 +69,6 @@ http://ftp.samonline.net/"""
 def log_event(message):
     timestamp = datetime.now().strftime("%H:%M:%S")
     st.session_state.logs.append(f"[{timestamp}] {message}")
-    # Keep log small
     if len(st.session_state.logs) > 50:
         st.session_state.logs.pop(0)
 
@@ -104,13 +103,11 @@ def check_proxy_basic(proxy_data, timeout, real_ip):
             result['Latency'] = latency
             result['Status'] = "Working"
             
-            # ISP & Country Check
             try:
-                # Using ip-api to get ISP name (Critical for BDIX)
                 geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=2).json()
                 if geo['status'] == 'success': 
                     result['Country'] = geo['countryCode']
-                    result['ISP'] = geo['isp'] # Captures "Link3", "AmberIT", etc.
+                    result['ISP'] = geo['isp']
             except: pass
     except: pass
     return result
@@ -120,27 +117,29 @@ def check_specific_target(proxy_data, target_urls, timeout):
     ip = proxy_data.get('IP') or proxy_data.get('ip')
     port = proxy_data.get('Port') or proxy_data.get('port')
     protocol = proxy_data.get('Protocol') or proxy_data.get('protocol')
-    protocol = protocol.lower()
+    protocol_lower = protocol.lower()
 
     proxy_conf = {
-        "http": f"{protocol}://{ip}:{port}",
-        "https": f"{protocol}://{ip}:{port}",
+        "http": f"{protocol_lower}://{ip}:{port}",
+        "https": f"{protocol_lower}://{ip}:{port}",
     }
     
-    # Identify Proxy
     isp_info = proxy_data.get('ISP', 'Unknown')
     proxy_label = f"{ip}:{port}"
     if isp_info != 'Unknown':
         proxy_label += f" ({isp_info})"
 
-    proxy_result = {"Proxy": proxy_label, "Raw_IP": f"{ip}:{port}"}
+    proxy_result = {
+        "Proxy": proxy_label, 
+        "Type": protocol.upper(), 
+        "Raw_IP": f"{ip}:{port}"
+    }
     
     for url in target_urls:
         url = url.strip()
         if not url: continue
         try:
             resp = requests.get(url, proxies=proxy_conf, timeout=5) 
-            # We now capture the specific status code
             if resp.status_code == 200:
                 proxy_result[url] = "✅ 200 OK"
             elif resp.status_code == 403:
@@ -165,11 +164,11 @@ with st.sidebar:
         timeout = st.slider("Timeout", 1, 15, 6)
         force_proto = st.selectbox("Protocol", ["AUTO", "http", "socks4", "socks5"])
     
-    st.info("New Feature: ISP Detection helps you match proxies to BDIX servers.")
+    st.info("Supported formats:\n1. ip:port\n2. protocol://ip:port\n3. ip port protocol")
 
 # --- MAIN UI ---
 st.title("🚀 Proxy & BDIX Master")
-st.markdown("**Created by RAKIB** | *v4.0 Professional*")
+st.markdown("**Created by RAKIB** | *v4.2 Professional*")
 
 # INPUT SECTION
 tab1, tab2 = st.tabs(["📋 Proxies", "🎯 BDIX/FTP Targets"])
@@ -177,7 +176,8 @@ tab1, tab2 = st.tabs(["📋 Proxies", "🎯 BDIX/FTP Targets"])
 with tab1:
     st.session_state.proxy_text = st.text_area(
         "Paste Proxies", value=st.session_state.proxy_text, height=120, 
-        placeholder="103.141.67.50 9090", label_visibility="collapsed"
+        placeholder="socks5://103.141.67.50:9090\n113.212.109.40:1080\n123.123.123.123 8080", 
+        label_visibility="collapsed"
     )
     c1, c2 = st.columns(2)
     if c1.button("🗑️ Clear Input", use_container_width=True):
@@ -199,39 +199,72 @@ with tab2:
 
 # START BUTTON
 if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=True):
-    # Reset
     st.session_state.results = []
     st.session_state.ftp_results = []
     st.session_state.check_done = False
     st.session_state.logs = []
     
-    # Parse
     lines = st.session_state.proxy_text.strip().split('\n')
     proxies_to_check = []
     seen = set()
+    
+    # --- UPDATED PARSING LOGIC ---
     for line in lines:
-        parts = line.split()
-        if len(parts) >= 2:
-            ip, port = parts[0], parts[1]
-            if f"{ip}:{port}" not in seen:
-                seen.add(f"{ip}:{port}")
+        line = line.strip()
+        if not line: continue
+        
+        ip, port, proto = None, None, None
+        
+        # Regex for 'protocol://ip:port' or 'ip:port'
+        # Group 1: Protocol (optional)
+        # Group 2: IP
+        # Group 3: Port
+        regex_match = re.search(r'(?:(?P<proto>[a-z0-9]+)://)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)', line, re.IGNORECASE)
+        
+        if regex_match:
+            # Case 1 & 2: protocol://ip:port OR ip:port
+            ip = regex_match.group('ip')
+            port = regex_match.group('port')
+            extracted_proto = regex_match.group('proto')
+            
+            # Determine Protocol
+            if extracted_proto:
+                # If explicit in string (socks5://...), use it
+                proto = extracted_proto.lower()
+            else:
+                # If just ip:port, check settings or other text in line
                 proto = force_proto if force_proto != "AUTO" else "http"
                 if force_proto == "AUTO":
                     if "socks5" in line.lower(): proto = "socks5"
                     elif "socks4" in line.lower(): proto = "socks4"
                     elif "https" in line.lower(): proto = "https"
-                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
-                    proxies_to_check.append({"ip": ip, "port": port, "protocol": proto})
+        else:
+            # Case 3: Space Separated (Old Format)
+            parts = line.split()
+            if len(parts) >= 2:
+                ip = parts[0]
+                port = parts[1]
+                proto = force_proto if force_proto != "AUTO" else "http"
+                if force_proto == "AUTO":
+                    if "socks5" in line.lower(): proto = "socks5"
+                    elif "socks4" in line.lower(): proto = "socks4"
+                    elif "https" in line.lower(): proto = "https"
+        
+        # Validate and Add
+        if ip and port and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
+            unique_id = f"{ip}:{port}"
+            if unique_id not in seen:
+                seen.add(unique_id)
+                proxies_to_check.append({"ip": ip, "port": port, "protocol": proto})
 
     if not proxies_to_check:
-        st.warning("No valid proxies found.")
+        st.warning("No valid proxies found. Check your format.")
     else:
-        # PHASE 1: CONNECTIVITY & ISP
+        # PHASE 1
         log_container = st.empty()
         real_ip = get_real_ip()
         results_temp = []
         
-        # Progress UI
         col_p1, col_p2 = st.columns([3, 1])
         with col_p1: bar = st.progress(0)
         with col_p2: status = st.empty()
@@ -248,14 +281,13 @@ if st.button("▶ START INTELLIGENT SCAN", type="primary", use_container_width=T
                 bar.progress(completed / len(proxies_to_check))
                 status.markdown(f"**Scan: {completed}/{len(proxies_to_check)}**")
                 
-                # Live Log Update
                 if res['Status'] == 'Working':
-                    log_event(f"SUCCESS: {res['IP']} ({res['ISP']}) - {res['Latency']}ms")
+                    log_event(f"SUCCESS: {res['IP']} ({res['ISP']})")
                 
         st.session_state.results = results_temp
         
-        # PHASE 2: TARGET CHECK (ALL PROXIES)
-        log_event("Starting Target/BDIX Checks...")
+        # PHASE 2
+        log_event("Starting Target Checks...")
         target_list = target_text.strip().split('\n')
         ftp_temp = []
         bar.progress(0)
@@ -281,35 +313,32 @@ if st.session_state.check_done:
     df_working = df[df['Status'] == "Working"]
     df_dead = df[df['Status'] == "Dead"]
     
-    # SUMMARY METRICS
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total", len(df))
     m2.metric("Working", len(df_working))
     m3.metric("Avg Latency", f"{int(df_working['Latency'].mean())}ms" if not df_working.empty else "-")
     m4.metric("Targets Hit", "View Below")
 
-    # TABS
     res_tab1, res_tab2, res_tab3 = st.tabs(["🎯 BDIX/FTP Matrix", "✅ Working & ISPs", "❌ Dead"])
 
     # TAB 1: FTP MATRIX
     with res_tab1:
         if st.session_state.ftp_results:
-            st.markdown("💡 **Tip:** Look for cells marked `✅ 200 OK`. The 'Proxy' column now shows the ISP.")
+            st.markdown("💡 **Tip:** Look for cells marked `✅ 200 OK`.")
             df_ftp = pd.DataFrame(st.session_state.ftp_results)
             
-            # Reorder columns to put Proxy first
-            cols = ['Proxy'] + [c for c in df_ftp.columns if c != 'Proxy' and c != 'Raw_IP']
-            df_ftp_display = df_ftp[cols]
+            # REORDER COLS
+            base_cols = ['Proxy', 'Type']
+            target_cols = [c for c in df_ftp.columns if c not in base_cols and c != 'Raw_IP']
+            df_ftp_display = df_ftp[base_cols + target_cols]
 
-            # Custom Styling
             def color_matrix(val):
                 if '✅' in str(val): return 'background-color: #28a745; color: white;'
-                if '⛔' in str(val): return 'background-color: #ffc107; color: black;' # 403 Forbidden
+                if '⛔' in str(val): return 'background-color: #ffc107; color: black;'
                 return ''
 
             st.dataframe(df_ftp_display.style.applymap(color_matrix), use_container_width=True)
             
-            # Copy Button for successful BDIX
             success_proxies = df_ftp[df_ftp.astype(str).apply(lambda x: x.str.contains('✅')).any(axis=1)]
             if not success_proxies.empty:
                 ips = success_proxies['Raw_IP'].tolist()
@@ -321,16 +350,13 @@ if st.session_state.check_done:
     # TAB 2: WORKING & ISP
     with res_tab2:
         if not df_working.empty:
-            # Color grade latency
             def latency_color(val):
                 if val < 200: return "🟢"
                 if val < 800: return "🟡"
                 return "🔴"
             
             df_working['Speed'] = df_working['Latency'].apply(latency_color)
-            
-            # Display Table
-            disp_df = df_working[['Speed', 'IP', 'Port', 'ISP', 'Country', 'Latency', 'Protocol', 'Full_Address']]
+            disp_df = df_working[['Speed', 'IP', 'Port', 'Protocol', 'ISP', 'Country', 'Latency', 'Full_Address']]
             
             sel_w = st.dataframe(
                 disp_df,
@@ -341,13 +367,11 @@ if st.session_state.check_done:
                 use_container_width=True, hide_index=True, on_select="rerun", selection_mode="multi-row"
             )
             
-            # Copy Logic
             rows = sel_w.selection.rows
             if rows:
                 txt = "\n".join(disp_df.iloc[rows]['Full_Address'].tolist())
                 st.code(txt, language="text")
             else:
-                # ISP FILTER
                 isps = sorted(df_working['ISP'].unique().tolist())
                 selected_isp = st.selectbox("Quick Copy by ISP:", ["All"] + isps)
                 if selected_isp != "All":
@@ -362,14 +386,14 @@ if st.session_state.check_done:
     # TAB 3: DEAD
     with res_tab3:
         if not df_dead.empty:
-            st.dataframe(df_dead[['IP', 'Port', 'Status']], use_container_width=True, hide_index=True)
+            st.dataframe(df_dead[['IP', 'Port', 'Protocol', 'Status']], use_container_width=True, hide_index=True)
             with st.expander("Copy Dead List"):
                 st.code("\n".join(df_dead['Full_Address'].tolist()))
 
-# --- LIVE LOGS (Bottom) ---
+# --- LIVE LOGS ---
 if st.session_state.logs:
     with st.expander("🖥️ Live Terminal Logs", expanded=False):
-        log_txt = "\n".join(st.session_state.logs[::-1]) # Reverse to show new on top
+        log_txt = "\n".join(st.session_state.logs[::-1])
         st.text_area("Log Output", value=log_txt, height=150, disabled=True)
 
 # --- FOOTER ---
