@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import random
 import io
+import json
 from datetime import datetime
 
 # --- FAILSAFE IMPORT ---
@@ -17,13 +18,13 @@ except ImportError:
 
 # --- CONFIGURATION ---
 st.set_page_config(
-    page_title="NETRUNNER_V4.0 | RAKIB",
+    page_title="NETRUNNER_V5.0 | RAKIB",
     page_icon="💠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- ADVANCED CYBERPUNK CSS & ANIMATIONS ---
+# --- ADVANCED CYBERPUNK CSS ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;500;700&family=Share+Tech+Mono&display=swap');
@@ -63,7 +64,7 @@ st.markdown("""
         animation: flicker 3s infinite;
     }
 
-    /* 3. SCI-FI BUTTONS (REDESIGNED) */
+    /* 3. SCI-FI BUTTONS */
     div.stButton > button {
         position: relative;
         background: rgba(0, 0, 0, 0.6);
@@ -75,51 +76,34 @@ st.markdown("""
         border-radius: 0;
         padding: 12px 24px;
         transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
-        clip-path: polygon(
-            10px 0, 100% 0, 
-            100% calc(100% - 10px), 
-            calc(100% - 10px) 100%, 
-            0 100%, 
-            0 10px
-        );
+        clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
         overflow: hidden;
     }
-    
-    /* Hover Effect */
     div.stButton > button:hover {
         background: var(--neon-cyan);
         color: #000;
-        box-shadow: 0 0 30px var(--neon-cyan), inset 0 0 10px rgba(0,0,0,0.5);
+        box-shadow: 0 0 30px var(--neon-cyan);
         transform: translateY(-2px);
     }
 
-    /* Primary Button (SCAN) - Pink/Red Style */
+    /* Primary Button (SCAN) */
     div.stButton > button[kind="primary"] {
-        border-color: var(--neon-pink);
-        color: var(--neon-pink);
-        background: rgba(255, 0, 85, 0.05);
-        box-shadow: 0 0 10px rgba(255, 0, 85, 0.1);
-        font-size: 18px;
+        border-color: var(--neon-green);
+        color: var(--neon-green);
+        background: rgba(0, 255, 10, 0.05);
     }
     div.stButton > button[kind="primary"]:hover {
-        background: var(--neon-pink);
-        color: #fff;
-        box-shadow: 0 0 40px var(--neon-pink);
-    }
-    
-    /* Button Scanline Animation */
-    div.stButton > button::before {
-        content: '';
-        position: absolute;
-        top: 0; left: -100%;
-        width: 100%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: 0.5s;
-    }
-    div.stButton > button:hover::before {
-        left: 100%;
+        background: var(--neon-green);
+        color: #000;
+        box-shadow: 0 0 40px var(--neon-green);
     }
 
+    /* Stop Button (Custom Class Workaround) */
+    div.stButton > button[data-testid="baseButton-secondary"] {
+        border-color: var(--neon-pink);
+        color: var(--neon-pink);
+    }
+    
     /* 4. CYBER CARDS */
     .cyber-card {
         background: var(--panel-bg);
@@ -129,22 +113,13 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-    /* Tech Corners */
-    .cyber-card::after {
+    .cyber-card::before {
         content: '';
         position: absolute;
         top: -1px; left: -1px;
         width: 10px; height: 10px;
         border-top: 2px solid var(--neon-cyan);
         border-left: 2px solid var(--neon-cyan);
-    }
-    .cyber-card::before {
-        content: '';
-        position: absolute;
-        bottom: -1px; right: -1px;
-        width: 10px; height: 10px;
-        border-bottom: 2px solid var(--neon-cyan);
-        border-right: 2px solid var(--neon-cyan);
     }
 
     /* 5. INPUTS & TABLES */
@@ -155,17 +130,12 @@ st.markdown("""
         font-family: 'Share Tech Mono', monospace !important;
         border-radius: 0 !important;
     }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: var(--neon-cyan) !important;
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
-    }
     
-    /* Dataframes */
     [data-testid="stDataFrame"] { border: 1px solid #333; }
     [data-testid="stDataFrame"] th { background-color: #0f0f0f !important; color: var(--neon-cyan) !important; font-family: 'Orbitron'; }
     [data-testid="stDataFrame"] td { background-color: #080808 !important; color: #bbb !important; font-family: 'Share Tech Mono'; }
 
-    /* 6. METRICS (HUD STYLE) */
+    /* 6. METRICS */
     [data-testid="stMetric"] {
         background: rgba(0,0,0,0.5);
         border-left: 2px solid var(--neon-purple);
@@ -188,12 +158,8 @@ st.markdown("""
     }
     
     /* ANIMATIONS */
-    @keyframes flicker {
-        0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; }
-    }
+    @keyframes flicker { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     
-    /* UTILS */
-    .neon-text { color: var(--neon-cyan); }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -205,6 +171,7 @@ if 'results' not in st.session_state: st.session_state.results = []
 if 'check_done' not in st.session_state: st.session_state.check_done = False
 if 'ftp_results' not in st.session_state: st.session_state.ftp_results = []
 if 'logs' not in st.session_state: st.session_state.logs = []
+if 'stop_scan' not in st.session_state: st.session_state.stop_scan = False
 
 # --- CONSTANTS ---
 DEFAULT_TARGETS = """http://10.16.100.244/
@@ -226,7 +193,7 @@ def log_event(message):
         st.session_state.logs.pop(0)
 
 def get_real_ip():
-    try: return requests.get("https://api.ipify.org", timeout=3).text
+    try: return requests.get("https://api.ipify.org", timeout=3).text.strip()
     except: return "Unknown"
 
 def check_proxy_basic(proxy_data, timeout, real_ip):
@@ -239,16 +206,30 @@ def check_proxy_basic(proxy_data, timeout, real_ip):
     result = {
         "IP": ip, "Port": port, "Protocol": protocol.upper(),
         "Country": "-", "ISP": "Unknown", "Latency": 99999, "Status": "Dead", 
-        "Full_Address": f"{ip}:{port}"
+        "Full_Address": f"{ip}:{port}", "Anonymity": "Unknown"
     }
     try:
         start = time.time()
+        # Use httpbin to get IP and headers for Anonymity check
         resp = requests.get("http://httpbin.org/get", proxies=proxy_conf, headers=headers, timeout=timeout)
         latency = round((time.time() - start) * 1000)
         
         if resp.status_code == 200:
             result['Latency'] = latency
             result['Status'] = "Working"
+            
+            # ANONYMITY CHECK
+            try:
+                json_data = resp.json()
+                origin = json_data.get('origin', '').split(',')[0].strip()
+                if origin != real_ip and origin != "Unknown":
+                    result['Anonymity'] = "🛡️ ELITE"
+                else:
+                    result['Anonymity'] = "⚠️ TRANSPARENT"
+            except:
+                result['Anonymity'] = "❓ UNKNOWN"
+
+            # GEO CHECK
             try:
                 geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=2).json()
                 if geo['status'] == 'success': 
@@ -301,16 +282,20 @@ with st.sidebar:
     force_proto = st.selectbox("FORCE_PROTOCOL", ["AUTO", "http", "socks4", "socks5"])
     
     st.markdown("---")
-    st.info("PROTOCOL_AUTO_DETECT: ON")
+    # STOP BUTTON
+    if st.button("🚨 EMERGENCY STOP", use_container_width=True):
+        st.session_state.stop_scan = True
+        st.toast("⚠️ STOPPING SCAN...", icon="🛑")
 
 # --- HEADER ---
 c1, c2 = st.columns([4, 1])
 with c1:
-    st.markdown("<h1>NETRUNNER <span style='color:var(--neon-pink); font-size:0.5em; vertical-align:middle'>ULTIMATE</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>NETRUNNER <span style='color:var(--neon-pink); font-size:0.5em; vertical-align:middle'>V5.0</span></h1>", unsafe_allow_html=True)
     st.markdown("<div style='font-family:monospace; color:var(--neon-cyan); letter-spacing:1px'>:: ARCHITECT: RAKIB :: BDIX INTELLIGENCE SYSTEM ::</div>", unsafe_allow_html=True)
 with c2:
     st.write("")
     if st.button("↻ REBOOT", use_container_width=True):
+        st.session_state.stop_scan = False
         st.rerun()
 
 st.write("")
@@ -321,7 +306,6 @@ st.markdown("#### <span style='color:var(--neon-green)'>DATA_INJECTION</span>", 
 tab_in1, tab_in2 = st.tabs(["📄 NODE_LIST", "🎯 TARGET_VECTORS"])
 
 with tab_in1:
-    # FILE UPLOAD FEATURE
     in_method = st.radio("INPUT_METHOD", ["MANUAL", "FILE_UPLOAD"], horizontal=True, label_visibility="collapsed")
     if in_method == "FILE_UPLOAD":
         up_file = st.file_uploader("UPLOAD .TXT/.CSV", type=['txt', 'csv'], label_visibility="collapsed")
@@ -331,7 +315,6 @@ with tab_in1:
     else:
         st.session_state.proxy_text = st.text_area("MANUAL", st.session_state.proxy_text, height=150, placeholder="socks5://1.1.1.1:8080", label_visibility="collapsed")
 
-    # BUTTON ROW
     bc1, bc2, bc3 = st.columns([1, 1, 3])
     with bc1:
         if st.button("🗑️ PURGE", use_container_width=True):
@@ -353,11 +336,11 @@ with tab_in2:
     target_text = st.text_area("TARGETS", DEFAULT_TARGETS, height=150, label_visibility="collapsed")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- EXECUTION BUTTON ---
+# --- EXECUTION ---
 col_act1, col_act2 = st.columns([1, 4])
 with col_act2:
     if st.button("▶ INITIATE_SCAN_SEQUENCE", type="primary", use_container_width=True):
-        # RESET
+        st.session_state.stop_scan = False
         st.session_state.results = []
         st.session_state.ftp_results = []
         st.session_state.check_done = False
@@ -372,7 +355,6 @@ with col_act2:
             line = line.strip()
             if not line: continue
             ip, port, proto = None, None, None
-            # Regex to catch ip:port or proto://ip:port
             match = re.search(r'(?:(?P<proto>[a-z0-9]+)://)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)', line, re.IGNORECASE)
             
             if match:
@@ -403,41 +385,52 @@ with col_act2:
                 futures = {executor.submit(check_proxy_basic, p, timeout, real_ip): p for p in proxies_to_check}
                 done = 0
                 for f in concurrent.futures.as_completed(futures):
+                    if st.session_state.stop_scan: break
                     res = f.result()
                     results_temp.append(res)
                     done += 1
                     bar.progress(done/len(proxies_to_check))
                     status.markdown(f"**SCANNING:** {done}/{len(proxies_to_check)}")
-                    if res['Status'] == 'Working': log_event(f"ALIVE: {res['IP']} ({res['ISP']})")
+                    if res['Status'] == 'Working': log_event(f"ALIVE: {res['IP']} ({res['Anonymity']})")
             
             st.session_state.results = results_temp
             
             # PHASE 2 (Targets)
-            log_event("STARTING MATRIX VERIFICATION...")
-            t_list = target_text.strip().split('\n')
-            ftp_temp = []
-            bar.progress(0)
-            done = 0
-            
-            with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
-                futures = {executor.submit(check_specific_target, p, t_list, 5): p for p in results_temp}
-                for f in concurrent.futures.as_completed(futures):
-                    ftp_temp.append(f.result())
-                    done += 1
-                    bar.progress(done/len(results_temp))
-                    status.markdown(f"**VERIFYING:** {done}/{len(results_temp)}")
+            if not st.session_state.stop_scan and results_temp:
+                log_event("STARTING MATRIX VERIFICATION...")
+                t_list = target_text.strip().split('\n')
+                ftp_temp = []
+                bar.progress(0)
+                done = 0
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+                    futures = {executor.submit(check_specific_target, p, t_list, 5): p for p in results_temp}
+                    for f in concurrent.futures.as_completed(futures):
+                        if st.session_state.stop_scan: break
+                        ftp_temp.append(f.result())
+                        done += 1
+                        bar.progress(done/len(results_temp))
+                        status.markdown(f"**VERIFYING:** {done}/{len(results_temp)}")
 
-            st.session_state.ftp_results = ftp_temp
+                st.session_state.ftp_results = ftp_temp
+
             st.session_state.check_done = True
             status.empty()
             bar.empty()
-            st.rerun()
+            if st.session_state.stop_scan:
+                st.warning("SCAN ABORTED BY USER.")
+            else:
+                st.rerun()
 
 # --- RESULTS ---
 if st.session_state.check_done:
     df = pd.DataFrame(st.session_state.results)
-    df_ok = df[df['Status'] == "Working"]
-    df_dead = df[df['Status'] == "Dead"]
+    if not df.empty:
+        df_ok = df[df['Status'] == "Working"]
+        df_dead = df[df['Status'] == "Dead"]
+    else:
+        df_ok = pd.DataFrame()
+        df_dead = pd.DataFrame()
     
     # METRICS
     m1, m2, m3, m4 = st.columns(4)
@@ -490,52 +483,57 @@ if st.session_state.check_done:
     st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
     t1, t2, t3 = st.tabs(["🚀 **MATRIX_GRID**", "✅ **ACTIVE_LIST**", "❌ **DEAD_POOL**"])
 
+    # TAB 1: MATRIX (RESTORED DETAILED COPY LOGIC)
     with t1:
-        # FEATURE: RESTORED MATRIX SELECTION
         if st.session_state.ftp_results:
             st.markdown("##### CONNECTION MATRIX")
             df_ftp = pd.DataFrame(st.session_state.ftp_results)
-            # Filter by Latency Check
-            valid_ips = set(df_filt['Full_Address'])
-            df_ftp = df_ftp[df_ftp['Raw_IP'].isin(valid_ips)]
+            if not df_filt.empty:
+                valid_ips = set(df_filt['Full_Address'])
+                df_ftp = df_ftp[df_ftp['Raw_IP'].isin(valid_ips)]
 
-            base = ['Proxy', 'Type']
-            t_cols = [c for c in df_ftp.columns if c not in base and c != 'Raw_IP']
+            if not df_ftp.empty:
+                base = ['Proxy', 'Type']
+                t_cols = [c for c in df_ftp.columns if c not in base and c != 'Raw_IP']
 
-            def color_m(val):
-                s = str(val)
-                if 'ACCESS' in s: return 'color:#0f0; font-weight:bold; background:rgba(0,255,0,0.1)'
-                if 'FORBID' in s: return 'color:#fa0'
-                if 'TIME' in s: return 'color:#666'
-                return ''
+                def color_m(val):
+                    s = str(val)
+                    if 'ACCESS' in s: return 'color:#0f0; font-weight:bold; background:rgba(0,255,0,0.1)'
+                    if 'FORBID' in s: return 'color:#fa0'
+                    if 'TIME' in s: return 'color:#666'
+                    return ''
 
-            # INTERACTIVE DATAFRAME FOR SELECTION
-            sel_matrix = st.dataframe(
-                df_ftp[base + t_cols].style.applymap(color_m),
-                use_container_width=True,
-                on_select="rerun",
-                selection_mode="multi-row"
-            )
-            
-            # COPY SELECTED LOGIC
-            rows = sel_matrix.selection.rows
-            if rows:
-                st.info(f"{len(rows)} ROWS SELECTED")
-                # Format: protocol://ip:port
-                selected_data = df_ftp.iloc[rows]
-                # Logic to construct the copy string
-                copy_lines = []
-                for idx, row in selected_data.iterrows():
-                    # Reconstruct simple proxy string
-                    copy_lines.append(f"{row['Type'].lower()}://{row['Raw_IP']}")
+                sel_matrix = st.dataframe(
+                    df_ftp[base + t_cols].style.applymap(color_m),
+                    use_container_width=True,
+                    on_select="rerun",
+                    selection_mode="multi-row"
+                )
                 
-                st.code("\n".join(copy_lines), language="text")
+                rows = sel_matrix.selection.rows
+                if rows:
+                    st.info(f"{len(rows)} ROWS SELECTED")
+                    selected_data = df_ftp.iloc[rows]
+                    copy_lines = []
+                    for idx, row in selected_data.iterrows():
+                        # RESTORED FEATURE: Show which specific URL opened
+                        opened_urls = []
+                        for col in t_cols:
+                            if "ACCESS_GRANTED" in str(row[col]):
+                                opened_urls.append(col)
+                        
+                        url_str = f" | Opens: {', '.join(opened_urls)}" if opened_urls else ""
+                        copy_lines.append(f"{row['Type'].lower()}://{row['Raw_IP']}{url_str}")
+                    
+                    st.code("\n".join(copy_lines), language="text")
+                else:
+                    st.caption("SELECT ROWS TO EXTRACT DETAILS")
             else:
-                 st.caption("SELECT ROWS TO EXTRACT")
+                st.warning("NO ACTIVE PROXIES MATCH FILTER.")
 
+    # TAB 2: ACTIVE LIST
     with t2:
         if not df_filt.empty:
-            # FEATURE: RESTORED ISP FILTER
             isps = sorted(df_filt['ISP'].unique().tolist())
             c_f1, c_f2 = st.columns([1, 2])
             with c_f1:
@@ -546,22 +544,21 @@ if st.session_state.check_done:
             else:
                 df_display = df_filt
                 
-            # CSV EXPORT
             csv = df_display.to_csv(index=False).encode('utf-8')
             st.download_button("⬇ DOWNLOAD_CSV", csv, f"NETRUNNER_SCAN_{datetime.now().strftime('%M%S')}.csv", "text/csv")
 
-            # COPY BLOCK
             st.markdown("#### QUICK_COPY")
             st.code("\n".join(df_display['Full_Address'].tolist()), language="text")
 
-            # TABLE
+            # Updated Columns for Anonymity
             st.dataframe(
-                df_display[['IP', 'Port', 'Protocol', 'ISP', 'Country', 'Latency']],
+                df_display[['IP', 'Port', 'Protocol', 'Anonymity', 'ISP', 'Country', 'Latency']],
                 use_container_width=True, hide_index=True
             )
         else:
             st.warning("NO DATA MATCHES FILTERS.")
 
+    # TAB 3: DEAD LIST
     with t3:
         if not df_dead.empty:
             st.dataframe(df_dead[['IP', 'Port', 'Protocol']], use_container_width=True)
@@ -580,6 +577,6 @@ if st.session_state.logs:
 # --- FOOTER ---
 st.markdown("""
 <div style="position:fixed; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.9); border-top:1px solid #333; text-align:center; font-size:10px; padding:5px; z-index:9999">
-    NETRUNNER_V4.0 &nbsp;•&nbsp; CREATED_BY <span class="rakib-brand">RAKIB</span> &nbsp;•&nbsp; <span style='color:var(--neon-green)'>SYSTEM_ONLINE</span>
+    NETRUNNER_V5.0 &nbsp;•&nbsp; CREATED_BY <span class="rakib-brand">RAKIB</span> &nbsp;•&nbsp; <span style='color:var(--neon-green)'>SYSTEM_ONLINE</span>
 </div>
 """, unsafe_allow_html=True)
