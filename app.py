@@ -18,7 +18,7 @@ except ImportError:
 
 # --- CONFIGURATION ---
 st.set_page_config(
-    page_title="NETRUNNER_V5.0 | RAKIB",
+    page_title="NETRUNNER_V5.1 | RAKIB",
     page_icon="💠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -98,7 +98,7 @@ st.markdown("""
         box-shadow: 0 0 40px var(--neon-green);
     }
 
-    /* Stop Button (Custom Class Workaround) */
+    /* Stop Button */
     div.stButton > button[data-testid="baseButton-secondary"] {
         border-color: var(--neon-pink);
         color: var(--neon-pink);
@@ -157,7 +157,6 @@ st.markdown("""
         box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.1);
     }
     
-    /* ANIMATIONS */
     @keyframes flicker { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     
     #MainMenu {visibility: hidden;}
@@ -185,7 +184,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0"
 ]
 
-# --- LOGIC FUNCTIONS ---
+# --- FUNCTIONS ---
 def log_event(message):
     timestamp = datetime.now().strftime("%H:%M:%S")
     st.session_state.logs.append(f"[{timestamp}] {message}")
@@ -210,7 +209,6 @@ def check_proxy_basic(proxy_data, timeout, real_ip):
     }
     try:
         start = time.time()
-        # Use httpbin to get IP and headers for Anonymity check
         resp = requests.get("http://httpbin.org/get", proxies=proxy_conf, headers=headers, timeout=timeout)
         latency = round((time.time() - start) * 1000)
         
@@ -218,7 +216,7 @@ def check_proxy_basic(proxy_data, timeout, real_ip):
             result['Latency'] = latency
             result['Status'] = "Working"
             
-            # ANONYMITY CHECK
+            # ANONYMITY
             try:
                 json_data = resp.json()
                 origin = json_data.get('origin', '').split(',')[0].strip()
@@ -229,7 +227,7 @@ def check_proxy_basic(proxy_data, timeout, real_ip):
             except:
                 result['Anonymity'] = "❓ UNKNOWN"
 
-            # GEO CHECK
+            # GEO
             try:
                 geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=2).json()
                 if geo['status'] == 'success': 
@@ -254,7 +252,7 @@ def check_specific_target(proxy_data, target_urls, timeout):
     proxy_result = {
         "Proxy": f"{ip}:{port}", 
         "Type": protocol.upper(), 
-        "Raw_IP": f"{ip}:{port}" # Key for linking back
+        "Raw_IP": f"{ip}:{port}"
     }
     
     for url in target_urls:
@@ -282,7 +280,6 @@ with st.sidebar:
     force_proto = st.selectbox("FORCE_PROTOCOL", ["AUTO", "http", "socks4", "socks5"])
     
     st.markdown("---")
-    # STOP BUTTON
     if st.button("🚨 EMERGENCY STOP", use_container_width=True):
         st.session_state.stop_scan = True
         st.toast("⚠️ STOPPING SCAN...", icon="🛑")
@@ -290,7 +287,7 @@ with st.sidebar:
 # --- HEADER ---
 c1, c2 = st.columns([4, 1])
 with c1:
-    st.markdown("<h1>NETRUNNER <span style='color:var(--neon-pink); font-size:0.5em; vertical-align:middle'>V5.0</span></h1>", unsafe_allow_html=True)
+    st.markdown("<h1>NETRUNNER <span style='color:var(--neon-pink); font-size:0.5em; vertical-align:middle'>V5.1</span></h1>", unsafe_allow_html=True)
     st.markdown("<div style='font-family:monospace; color:var(--neon-cyan); letter-spacing:1px'>:: ARCHITECT: RAKIB :: BDIX INTELLIGENCE SYSTEM ::</div>", unsafe_allow_html=True)
 with c2:
     st.write("")
@@ -313,7 +310,7 @@ with tab_in1:
             st.session_state.proxy_text = io.StringIO(up_file.getvalue().decode("utf-8")).read()
             st.success(f"FILE_LOADED: {len(st.session_state.proxy_text.splitlines())} LINES")
     else:
-        st.session_state.proxy_text = st.text_area("MANUAL", st.session_state.proxy_text, height=150, placeholder="socks5://1.1.1.1:8080", label_visibility="collapsed")
+        st.session_state.proxy_text = st.text_area("MANUAL", st.session_state.proxy_text, height=150, placeholder="Paste data (Column or Table format)", label_visibility="collapsed")
 
     bc1, bc2, bc3 = st.columns([1, 1, 3])
     with bc1:
@@ -346,7 +343,7 @@ with col_act2:
         st.session_state.check_done = False
         st.session_state.logs = []
         
-        # PARSE
+        # --- ENHANCED PARSING LOGIC ---
         lines = st.session_state.proxy_text.strip().split('\n')
         proxies_to_check = []
         seen = set()
@@ -354,26 +351,48 @@ with col_act2:
         for line in lines:
             line = line.strip()
             if not line: continue
-            ip, port, proto = None, None, None
-            match = re.search(r'(?:(?P<proto>[a-z0-9]+)://)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)', line, re.IGNORECASE)
             
-            if match:
-                ip, port = match.group('ip'), match.group('port')
-                extracted = match.group('proto')
-                proto = extracted.lower() if extracted else (force_proto if force_proto != "AUTO" else "http")
-                if force_proto == "AUTO" and not extracted:
-                    if "socks5" in line.lower(): proto = "socks5"
-                    elif "socks4" in line.lower(): proto = "socks4"
-                    elif "https" in line.lower(): proto = "https"
+            parsed_ip, parsed_port, parsed_proto = None, None, None
             
-            if ip and port:
-                uid = f"{ip}:{port}"
+            # STRATEGY 1: Tab/Space Separated (e.g., "1.1.1.1 8080 SOCKS5")
+            parts = re.split(r'\s+', line)
+            # Check if Part 0 is IP and Part 1 is Port
+            if len(parts) >= 2 and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", parts[0]) and parts[1].isdigit():
+                parsed_ip = parts[0]
+                parsed_port = parts[1]
+                # Try to find protocol in the rest
+                if len(parts) >= 3:
+                    potential = parts[2].lower()
+                    if "socks5" in potential: parsed_proto = "socks5"
+                    elif "socks4" in potential: parsed_proto = "socks4"
+                    elif "https" in potential: parsed_proto = "https"
+                    elif "http" in potential: parsed_proto = "http"
+
+            # STRATEGY 2: Standard URI or IP:Port (Regex)
+            if not parsed_ip:
+                match = re.search(r'(?:(?P<proto>[a-z0-9]+)://)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)', line, re.IGNORECASE)
+                if match:
+                    parsed_ip = match.group('ip')
+                    parsed_port = match.group('port')
+                    parsed_proto = match.group('proto')
+            
+            # FINALIZE PROTOCOL
+            if parsed_ip and parsed_port:
+                uid = f"{parsed_ip}:{parsed_port}"
                 if uid not in seen:
+                    # Determine Protocol
+                    final_proto = parsed_proto.lower() if parsed_proto else (force_proto if force_proto != "AUTO" else "http")
+                    # Fallback auto-detect from text
+                    if force_proto == "AUTO" and not parsed_proto:
+                        if "socks5" in line.lower(): final_proto = "socks5"
+                        elif "socks4" in line.lower(): final_proto = "socks4"
+                        elif "https" in line.lower(): final_proto = "https"
+                    
                     seen.add(uid)
-                    proxies_to_check.append({"ip": ip, "port": port, "protocol": proto})
+                    proxies_to_check.append({"ip": parsed_ip, "port": parsed_port, "protocol": final_proto})
 
         if not proxies_to_check:
-            st.error("NO DATA DETECTED.")
+            st.error("NO VALID NODES DETECTED. CHECK INPUT FORMAT.")
         else:
             # PHASE 1
             real_ip = get_real_ip()
@@ -395,7 +414,7 @@ with col_act2:
             
             st.session_state.results = results_temp
             
-            # PHASE 2 (Targets)
+            # PHASE 2
             if not st.session_state.stop_scan and results_temp:
                 log_event("STARTING MATRIX VERIFICATION...")
                 t_list = target_text.strip().split('\n')
@@ -444,7 +463,6 @@ if st.session_state.check_done:
         st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
         st.markdown("##### <span class='neon-text'>GLOBAL_INTELLIGENCE</span>", unsafe_allow_html=True)
         
-        # 3D MAP
         fig = px.scatter_geo(
             df_ok, locations="Country", locationmode='ISO-3', hover_name="ISP",
             size="Latency", projection="orthographic", color="Protocol",
@@ -458,7 +476,6 @@ if st.session_state.check_done:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # CHARTS
         cc1, cc2 = st.columns(2)
         with cc1:
             pc = df_ok['Protocol'].value_counts().reset_index()
@@ -472,7 +489,7 @@ if st.session_state.check_done:
             st.plotly_chart(fig_h, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # FILTER SLIDER
+    # FILTER
     if not df_ok.empty:
         max_lat = st.slider("LATENCY_FILTER (MS)", 0, 5000, 3000)
         df_filt = df_ok[df_ok['Latency'] <= max_lat]
@@ -483,7 +500,6 @@ if st.session_state.check_done:
     st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
     t1, t2, t3 = st.tabs(["🚀 **MATRIX_GRID**", "✅ **ACTIVE_LIST**", "❌ **DEAD_POOL**"])
 
-    # TAB 1: MATRIX (RESTORED DETAILED COPY LOGIC)
     with t1:
         if st.session_state.ftp_results:
             st.markdown("##### CONNECTION MATRIX")
@@ -495,7 +511,6 @@ if st.session_state.check_done:
             if not df_ftp.empty:
                 base = ['Proxy', 'Type']
                 t_cols = [c for c in df_ftp.columns if c not in base and c != 'Raw_IP']
-
                 def color_m(val):
                     s = str(val)
                     if 'ACCESS' in s: return 'color:#0f0; font-weight:bold; background:rgba(0,255,0,0.1)'
@@ -516,22 +531,17 @@ if st.session_state.check_done:
                     selected_data = df_ftp.iloc[rows]
                     copy_lines = []
                     for idx, row in selected_data.iterrows():
-                        # RESTORED FEATURE: Show which specific URL opened
                         opened_urls = []
                         for col in t_cols:
-                            if "ACCESS_GRANTED" in str(row[col]):
-                                opened_urls.append(col)
-                        
+                            if "ACCESS_GRANTED" in str(row[col]): opened_urls.append(col)
                         url_str = f" | Opens: {', '.join(opened_urls)}" if opened_urls else ""
                         copy_lines.append(f"{row['Type'].lower()}://{row['Raw_IP']}{url_str}")
-                    
                     st.code("\n".join(copy_lines), language="text")
                 else:
                     st.caption("SELECT ROWS TO EXTRACT DETAILS")
             else:
                 st.warning("NO ACTIVE PROXIES MATCH FILTER.")
 
-    # TAB 2: ACTIVE LIST
     with t2:
         if not df_filt.empty:
             isps = sorted(df_filt['ISP'].unique().tolist())
@@ -546,19 +556,12 @@ if st.session_state.check_done:
                 
             csv = df_display.to_csv(index=False).encode('utf-8')
             st.download_button("⬇ DOWNLOAD_CSV", csv, f"NETRUNNER_SCAN_{datetime.now().strftime('%M%S')}.csv", "text/csv")
-
             st.markdown("#### QUICK_COPY")
             st.code("\n".join(df_display['Full_Address'].tolist()), language="text")
-
-            # Updated Columns for Anonymity
-            st.dataframe(
-                df_display[['IP', 'Port', 'Protocol', 'Anonymity', 'ISP', 'Country', 'Latency']],
-                use_container_width=True, hide_index=True
-            )
+            st.dataframe(df_display[['IP', 'Port', 'Protocol', 'Anonymity', 'ISP', 'Country', 'Latency']], use_container_width=True, hide_index=True)
         else:
             st.warning("NO DATA MATCHES FILTERS.")
 
-    # TAB 3: DEAD LIST
     with t3:
         if not df_dead.empty:
             st.dataframe(df_dead[['IP', 'Port', 'Protocol']], use_container_width=True)
@@ -577,6 +580,6 @@ if st.session_state.logs:
 # --- FOOTER ---
 st.markdown("""
 <div style="position:fixed; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.9); border-top:1px solid #333; text-align:center; font-size:10px; padding:5px; z-index:9999">
-    NETRUNNER_V5.0 &nbsp;•&nbsp; CREATED_BY <span class="rakib-brand">RAKIB</span> &nbsp;•&nbsp; <span style='color:var(--neon-green)'>SYSTEM_ONLINE</span>
+    NETRUNNER_V5.1 &nbsp;•&nbsp; CREATED_BY <span class="rakib-brand">RAKIB</span> &nbsp;•&nbsp; <span style='color:var(--neon-green)'>SYSTEM_ONLINE</span>
 </div>
 """, unsafe_allow_html=True)
